@@ -2,6 +2,9 @@ package com.example.doggo.repository
 
 import com.example.doggo.data.HouseSitJob
 import com.example.doggo.data.HouseSitJobDao
+import com.example.doggo.data.SuburbLocation
+import com.example.doggo.data.SuburbLocationDao
+import com.example.doggo.network.GeocodingService
 import com.example.doggo.scraper.Scraper
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.Dispatchers
@@ -10,7 +13,9 @@ import android.util.Log
 
 class HouseSitRepository(
     private val dao: HouseSitJobDao,
-    private val scraper: Scraper
+    private val suburbDao: SuburbLocationDao,
+    private val scraper: Scraper,
+    private val geocodingService: GeocodingService
 ) {
     val allActiveJobs: Flow<List<HouseSitJob>> = dao.getAllActiveJobs()
     val favoriteJobs: Flow<List<HouseSitJob>> = dao.getFavoriteJobs()
@@ -34,10 +39,42 @@ class HouseSitRepository(
                     Log.d("HouseSitRepository", "Job ${job.id} (${job.suburb}) already exists. Stopping scrape.")
                     false // Stop
                 } else {
-                    Log.d("HouseSitRepository", "Inserting new job: ${job.id} (${job.suburb})")
-                    dao.insertAll(listOf(job))
+                    // 3. Geocode-on-scrape logic
+                    val geocodedJob = if (job.latitude == 0.0 || job.longitude == 0.0) {
+                        geocodeJob(job)
+                    } else job
+
+                    Log.d("HouseSitRepository", "Inserting new job: ${geocodedJob.id} (${geocodedJob.suburb})")
+                    dao.insertAll(listOf(geocodedJob))
                     true // Continue
                 }
+            }
+        }
+    }
+
+    private suspend fun geocodeJob(job: HouseSitJob): HouseSitJob {
+        val cacheId = "${job.suburb.lowercase()},${job.state.lowercase()}"
+        val cachedLocation = suburbDao.getLocation(cacheId)
+
+        return if (cachedLocation != null) {
+            Log.d("HouseSitRepository", "Cache hit for $cacheId")
+            job.copy(latitude = cachedLocation.latitude, longitude = cachedLocation.longitude)
+        } else {
+            Log.d("HouseSitRepository", "Cache miss for $cacheId, calling API")
+            val coords = geocodingService.getCoordinates(job.suburb, job.state)
+            if (coords != null) {
+                suburbDao.insertLocation(
+                    SuburbLocation(
+                        id = cacheId,
+                        suburb = job.suburb,
+                        state = job.state,
+                        latitude = coords.first,
+                        longitude = coords.second
+                    )
+                )
+                job.copy(latitude = coords.first, longitude = coords.second)
+            } else {
+                job // Return as is if geocoding fails
             }
         }
     }

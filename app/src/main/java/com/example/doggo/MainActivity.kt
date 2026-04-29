@@ -17,6 +17,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.example.doggo.data.AppDatabase
 import com.example.doggo.repository.HouseSitRepository
+import com.example.doggo.network.GeocodingService
 import com.example.doggo.scraper.AHSScraper
 import com.example.doggo.scraper.JobParser
 import com.example.doggo.ui.screens.ListScreen
@@ -51,7 +52,13 @@ class MainActivity : ComponentActivity() {
         val database = AppDatabase.getDatabase(this)
         val jobParser = JobParser()
         val scraper = AHSScraper(jobParser)
-        val repository = HouseSitRepository(database.houseSitJobDao(), scraper)
+        val geocodingService = GeocodingService()
+        val repository = HouseSitRepository(
+            database.houseSitJobDao(),
+            database.suburbLocationDao(),
+            scraper,
+            geocodingService
+        )
         
         // One-time cleanup for any bad data during development
         GlobalScope.launch(Dispatchers.IO) {
@@ -67,28 +74,42 @@ class MainActivity : ComponentActivity() {
         setContent {
             DoggoTheme {
                 val viewModel: DoggoViewModel = viewModel(factory = viewModelFactory)
-                val currentNavKey = remember { mutableStateOf<DoggoNavKey>(DoggoNavKey.List) }
+                
+                // Initialize the backstack as a mutable list of keys
+                val backStack = rememberNavBackStack(DoggoNavKey.List as DoggoNavKey)
+                val currentKey = backStack.lastOrNull()
 
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
                     bottomBar = {
                         NavigationBar {
                             NavigationBarItem(
-                                selected = currentNavKey.value is DoggoNavKey.List,
-                                onClick = { currentNavKey.value = DoggoNavKey.List },
+                                selected = currentKey is DoggoNavKey.List,
+                                onClick = { 
+                                    // Reset to List as the root
+                                    if (currentKey !is DoggoNavKey.List) {
+                                        backStack.clear()
+                                        backStack.add(DoggoNavKey.List)
+                                    }
+                                },
                                 icon = { Icon(Icons.Default.List, contentDescription = "List") },
                                 label = { Text("List") }
                             )
                             NavigationBarItem(
-                                selected = currentNavKey.value is DoggoNavKey.Map,
-                                onClick = { currentNavKey.value = DoggoNavKey.Map },
+                                selected = currentKey is DoggoNavKey.Map,
+                                onClick = { 
+                                    // Reset to Map as the root
+                                    if (currentKey !is DoggoNavKey.Map) {
+                                        backStack.clear()
+                                        backStack.add(DoggoNavKey.Map)
+                                    }
+                                },
                                 icon = { Icon(Icons.Default.Map, contentDescription = "Map") },
                                 label = { Text("Map") }
                             )
                         }
                     }
                 ) { innerPadding ->
-                    val backStack = rememberNavBackStack(currentNavKey.value)
                     NavDisplay(
                         backStack = backStack,
                         modifier = Modifier.padding(innerPadding),
