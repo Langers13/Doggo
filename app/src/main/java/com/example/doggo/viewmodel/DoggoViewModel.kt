@@ -28,14 +28,22 @@ class DoggoViewModel(
                 filters.selectedStates.contains(job.state.uppercase())
             } else true
             
+            val matchesSource = if (filters.selectedSources.isNotEmpty()) {
+                filters.selectedSources.contains(job.source)
+            } else true
+
             val matchesDate = if (filters.startDate != null && filters.endDate != null) {
                 // Overlap: jobStart <= filterEnd AND jobEnd >= filterStart
                 job.startDate <= filters.endDate && job.endDate >= filters.startDate
             } else true
 
-            matchesFavorite && matchesArchived && matchesState && matchesDate
+            matchesFavorite && matchesArchived && matchesState && matchesSource && matchesDate
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val sources: StateFlow<Set<String>> = repository.allActiveJobs
+        .map { jobs -> jobs.map { it.source }.filter { it.isNotEmpty() }.toSet() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
 
     val favoriteJobs = repository.favoriteJobs.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val archivedJobs = repository.archivedJobs.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -68,6 +76,7 @@ class DoggoViewModel(
         val onlyFavorites: Boolean = false,
         val includeArchived: Boolean = false,
         val selectedStates: Set<String> = emptySet(),
+        val selectedSources: Set<String> = emptySet(),
         val startDate: Long? = null,
         val endDate: Long? = null
     )

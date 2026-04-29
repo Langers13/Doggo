@@ -19,9 +19,9 @@ import com.example.doggo.data.AppDatabase
 import com.example.doggo.repository.HouseSitRepository
 import com.example.doggo.scraper.AHSScraper
 import com.example.doggo.scraper.JobParser
-import com.example.doggo.ui.screens.JobDetailScreen
 import com.example.doggo.ui.screens.ListScreen
 import com.example.doggo.ui.screens.MapScreen
+import com.example.doggo.ui.screens.WebViewScreen
 import com.example.doggo.ui.theme.DoggoTheme
 import com.example.doggo.viewmodel.DoggoViewModel
 import androidx.navigation3.runtime.NavKey
@@ -40,7 +40,7 @@ sealed interface DoggoNavKey : NavKey {
     @Serializable
     data object Map : DoggoNavKey
     @Serializable
-    data class Detail(val jobId: String) : DoggoNavKey
+    data class WebView(val url: String, val title: String) : DoggoNavKey
 }
 
 class MainActivity : ComponentActivity() {
@@ -98,24 +98,18 @@ class MainActivity : ComponentActivity() {
                                 content = {
                                     when (key) {
                                     is DoggoNavKey.List -> ListScreen(viewModel, onJobClick = { job ->
-                                        // Internal navigation is handled inside ListScreen, 
-                                        // but we could also add to backStack if we want a separate detail screen
+                                        backStack.add(DoggoNavKey.WebView(job.listingUrl, job.suburb))
                                     })
                                     is DoggoNavKey.Map -> MapScreen(viewModel, onJobClick = { job ->
-                                        // On map, we might want to navigate to the detail screen explicitly
-                                        backStack.add(DoggoNavKey.Detail(job.id))
+                                        backStack.add(DoggoNavKey.WebView(job.listingUrl, job.suburb))
                                     })
-                                        is DoggoNavKey.Detail -> {
-                                            val job = viewModel.jobs.collectAsState().value.find { it.id == key.jobId }
-                                            if (job != null) {
-                                                JobDetailScreen(
-                                                    job = job,
-                                                    onFavoriteToggle = { viewModel.toggleFavorite(job) },
-                                                    onArchive = { viewModel.archiveJob(job) },
-                                                    onBack = { if (backStack.size > 1) backStack.removeLast() }
-                                                )
-                                            }
-                                        }
+                                    is DoggoNavKey.WebView -> {
+                                        WebViewScreen(
+                                            url = key.url,
+                                            title = key.title,
+                                            onBack = { if (backStack.size > 1) backStack.removeLast() }
+                                        )
+                                    }
                                     }
                                 }
                             )

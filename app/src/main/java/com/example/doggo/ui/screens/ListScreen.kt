@@ -50,9 +50,9 @@ fun ListScreen(
     modifier: Modifier = Modifier
 ) {
     val jobs by viewModel.jobs.collectAsState()
+    val availableSources by viewModel.sources.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val filterState by viewModel.filterState.collectAsState()
-    val navigator = rememberListDetailPaneScaffoldNavigator<Any>()
     val scope = rememberCoroutineScope()
     
     var showFilters by remember { mutableStateOf(false) }
@@ -133,6 +133,29 @@ fun ListScreen(
                     }
                 }
 
+                if (availableSources.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    FilterSection("Sources") {
+                        Row {
+                            availableSources.forEach { source ->
+                                FilterChip(
+                                    selected = filterState.selectedSources.contains(source),
+                                    onClick = {
+                                        val newSources = if (filterState.selectedSources.contains(source)) {
+                                            filterState.selectedSources - source
+                                        } else {
+                                            filterState.selectedSources + source
+                                        }
+                                        viewModel.setFilter(filterState.copy(selectedSources = newSources))
+                                    },
+                                    label = { Text(source) },
+                                    modifier = Modifier.padding(end = 8.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(16.dp))
                 FilterSection("Date Range") {
                     Button(onClick = { showDatePicker = true }) {
@@ -152,91 +175,54 @@ fun ListScreen(
         }
     }
 
-    ListDetailPaneScaffold(
-        directive = navigator.scaffoldDirective,
-        value = navigator.scaffoldValue,
-        listPane = {
-            Scaffold(
-                topBar = {
-                    TopAppBar(
-                        title = { Text("Doggo Listings") },
-                        actions = {
-                            IconButton(onClick = { showFilters = true }) {
-                                Icon(Icons.Default.FilterList, contentDescription = "Filter")
-                                if (filterState.selectedStates.isNotEmpty() || filterState.onlyFavorites || filterState.startDate != null) {
-                                    Badge(modifier = Modifier.size(8.dp))
-                                }
-                            }
-                        }
-                    )
-                },
-                floatingActionButton = {
-                    LargeFloatingActionButton(
-                        onClick = { viewModel.refresh() },
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    ) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Doggo Listings") },
+                actions = {
+                    IconButton(onClick = { viewModel.refresh() }, enabled = !isRefreshing) {
                         if (isRefreshing) {
-                            CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
                         } else {
                             Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                         }
                     }
-                }
-            ) { innerPadding ->
-                if (jobs.isEmpty() && !isRefreshing) {
-                    Box(modifier = Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("No jobs found.", style = MaterialTheme.typography.bodyLarge)
-                            Button(onClick = { viewModel.refresh() }, modifier = Modifier.padding(top = 16.dp)) {
-                                Text("Search for Jobs")
-                            }
-                        }
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize().padding(innerPadding),
-                        contentPadding = PaddingValues(8.dp)
-                    ) {
-                        items(jobs) { job ->
-                            JobCard(
-                                job = job,
-                                onFavoriteToggle = { viewModel.toggleFavorite(job) },
-                                onArchive = { viewModel.archiveJob(job) },
-                                onClick = { 
-                                    scope.launch {
-                                        navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, job)
-                                    }
-                                    onJobClick(job)
-                                }
-                            )
+                    IconButton(onClick = { showFilters = true }) {
+                        Icon(Icons.Default.FilterList, contentDescription = "Filter")
+                        if (filterState.selectedStates.isNotEmpty() || filterState.onlyFavorites || filterState.startDate != null || filterState.selectedSources.isNotEmpty()) {
+                            Badge(modifier = Modifier.size(8.dp))
                         }
                     }
                 }
-            }
-        },
-        detailPane = {
-            val selectedJob = navigator.currentDestination?.contentKey as? HouseSitJob
-            if (selectedJob != null) {
-                JobDetailScreen(
-                    job = selectedJob,
-                    onFavoriteToggle = { viewModel.toggleFavorite(selectedJob) },
-                    onArchive = { 
-                        viewModel.archiveJob(selectedJob)
-                        scope.launch { navigator.navigateBack() }
-                    },
-                    onBack = { 
-                        scope.launch {
-                            navigator.navigateBack() 
-                        }
-                    }
-                )
-            } else {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Select a job to see details")
-                }
-            }
+            )
         },
         modifier = modifier
-    )
+    ) { innerPadding ->
+        if (jobs.isEmpty() && !isRefreshing) {
+            Box(modifier = Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("No jobs found.", style = MaterialTheme.typography.bodyLarge)
+                    Button(onClick = { viewModel.refresh() }, modifier = Modifier.padding(top = 16.dp)) {
+                        Text("Search for Jobs")
+                    }
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(innerPadding),
+                contentPadding = PaddingValues(8.dp)
+            ) {
+                items(jobs) { job ->
+                    JobCard(
+                        job = job,
+                        onFavoriteToggle = { viewModel.toggleFavorite(job) },
+                        onArchive = { viewModel.archiveJob(job) },
+                        onClick = { 
+                            onJobClick(job)
+                        }
+                    )
+                }
+            }
+        }
+    }
 }

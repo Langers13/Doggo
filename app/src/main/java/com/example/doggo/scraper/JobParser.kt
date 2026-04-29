@@ -10,7 +10,7 @@ class JobParser {
     
     private val dateFormat = SimpleDateFormat("d MMM yyyy", Locale.US)
 
-    fun parseJobElement(listing: Element, externalLat: Double?, externalLng: Double?, externalId: String?): HouseSitJob? {
+    fun parseJobElement(listing: Element, externalLat: Double?, externalLng: Double?, externalId: String?, source: String): HouseSitJob? {
         return try {
             // 1. Job ID and URL Extraction
             val linkElement = listing.select("h3 a")
@@ -36,10 +36,35 @@ class JobParser {
             val state = stateText.split(" ").firstOrNull()?.trim() ?: "Unknown"
 
             // 3. Image
-            val style = listing.select(".photo-link").attr("style")
-            val imageUrl = Regex("url\\((.*?)\\)").find(style)?.groupValues?.getOrNull(1)?.removeSurrounding("'")?.removeSurrounding("\"")?.let {
-                if (it.startsWith("http")) it else "https://www.aussiehousesitters.com.au$it"
-            } ?: ""
+            var imageUrl = ""
+            val photoLink = listing.select(".photo-link")
+            val style = photoLink.attr("style")
+            
+            // Try background-image first
+            imageUrl = Regex("url\\((.*?)\\)").find(style)?.groupValues?.getOrNull(1)?.removeSurrounding("'")?.removeSurrounding("\"") ?: ""
+            
+            // Fallback to <img> tag inside photo-link
+            if (imageUrl.isEmpty()) {
+                imageUrl = photoLink.select("img").attr("src").ifEmpty { 
+                    photoLink.select("img").attr("data-src") 
+                }
+            }
+
+            // Fallback to any <img> in the listing
+            if (imageUrl.isEmpty()) {
+                imageUrl = listing.select("img").firstOrNull { it.attr("src").contains("houses") }?.attr("src") ?: ""
+            }
+
+            imageUrl = imageUrl.let {
+                when {
+                    it.isEmpty() -> ""
+                    it.startsWith("http") -> it
+                    it.startsWith("//") -> "https:$it"
+                    it.startsWith("/") -> "https://www.aussiehousesitters.com.au$it"
+                    else -> "https://www.aussiehousesitters.com.au/$it"
+                }
+            }
+            Log.d("JobParser", "Captured Image URL: '$imageUrl'")
             
             // 4. Description
             val tag = listing.select(".listing-tag").text().trim()
@@ -72,7 +97,8 @@ class JobParser {
                 longitude = externalLng ?: 0.0,
                 startDate = startDate,
                 endDate = endDate,
-                listingUrl = listingUrl
+                listingUrl = listingUrl,
+                source = source
             )
         } catch (e: Exception) {
             Log.e("JobParser", "Error parsing element", e)

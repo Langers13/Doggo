@@ -97,7 +97,7 @@ class AHSScraper(
                         val lng = listing.attr("data-lng").toDoubleOrNull()
 
                         Log.d("AHSScraper", "Parsing listing. Extracted ID: '$extractedId'")
-                        val job = jobParser.parseJobElement(listing, lat, lng, extractedId)
+                        val job = jobParser.parseJobElement(listing, lat, lng, extractedId, "AHS")
 
                         if (job != null) {
                             Log.d("AHSScraper", "Successfully parsed job: ${job.suburb}")

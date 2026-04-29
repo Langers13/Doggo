@@ -15,6 +15,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import coil3.network.NetworkHeaders
+import coil3.network.httpHeaders
+import coil3.request.crossfade
 import com.example.doggo.data.HouseSitJob
 import java.text.SimpleDateFormat
 import java.util.*
@@ -42,37 +45,68 @@ fun JobCard(
         Column {
             Box {
                 AsyncImage(
-                    model = job.imageUrl,
+                    model = coil3.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+                        .data(job.imageUrl)
+                        .httpHeaders(
+                            NetworkHeaders.Builder()
+                                .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+                                .set("Referer", "https://www.aussiehousesitters.com.au/")
+                                .build()
+                        )
+                        .crossfade(true)
+                        .listener(
+                            onError = { _: coil3.request.ImageRequest, result: coil3.request.ErrorResult ->
+                                android.util.Log.e("Coil", "Error loading image: ${job.imageUrl}", result.throwable)
+                            }
+                        )
+                        .build(),
                     contentDescription = "House in ${job.suburb}",
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(200.dp)
                         .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
-                    contentScale = ContentScale.Crop
+                    contentScale = ContentScale.Crop,
+                    placeholder = androidx.compose.ui.res.painterResource(android.R.drawable.ic_menu_gallery),
+                    error = androidx.compose.ui.res.painterResource(android.R.drawable.ic_dialog_alert)
                 )
-                
-                IconButton(
-                    onClick = onFavoriteToggle,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(8.dp)
-                ) {
-                    Icon(
-                        imageVector = if (job.isFavorited) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        contentDescription = "Favorite",
-                        tint = if (job.isFavorited) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                    )
-                }
             }
 
             Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (job.source == "AHS") {
+                        androidx.compose.foundation.Image(
+                            painter = androidx.compose.ui.res.painterResource(id = com.example.doggo.R.drawable.ahs_logo),
+                            contentDescription = "AHS Logo",
+                            modifier = Modifier.size(40.dp)
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    IconButton(onClick = onArchive) {
+                        Icon(
+                            imageVector = Icons.Default.VisibilityOff,
+                            contentDescription = "Archive"
+                        )
+                    }
+                    IconButton(onClick = onFavoriteToggle) {
+                        Icon(
+                            imageVector = if (job.isFavorited) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            contentDescription = "Favorite",
+                            tint = if (job.isFavorited) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+
                 Text(
                     text = "${job.suburb}, ${job.state}",
                     style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.fillMaxWidth()
                 )
-                
-                Spacer(modifier = Modifier.height(4.dp))
                 
                 val dateFormat = SimpleDateFormat("dd MMM", Locale.getDefault())
                 val dateRange = "${dateFormat.format(Date(job.startDate))} - ${dateFormat.format(Date(job.endDate))}"
@@ -94,7 +128,7 @@ fun JobCard(
                 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.Start,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -109,13 +143,6 @@ fun JobCard(
                             text = job.animals.joinToString(", "),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.secondary
-                        )
-                    }
-                    
-                    IconButton(onClick = onArchive) {
-                        Icon(
-                            imageVector = Icons.Default.VisibilityOff,
-                            contentDescription = "Archive"
                         )
                     }
                 }
