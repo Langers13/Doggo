@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- House -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M30,45 L54,25 L78,45 L72,45 L72,85 L36,85 L36,45 Z" />
+    <!-- Dog Silhouette (Cutout) -->
+    <path
+        android:fillColor="#009688"
+        android:pathData="M54,60 C50,60 47,63 47,67 C47,71 50,74 54,74 C58,74 61,71 61,67 C61,63 58,60 54,60 Z M48,62 L42,55 L49,59 Z M60,62 L66,55 L59,59 Z M48,74 L45,85 L63,85 L60,74 Z" />
+</vector>
