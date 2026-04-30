@@ -53,7 +53,7 @@ class AHSScraper(
                 var continueScraping = true
                 Log.d("AHSScraper", "Starting scrape for state: $state")
 
-                while (continueScraping && page <= 3) { // Limit to 3 pages per state for testing
+                while (continueScraping) {
                     // Updated URLs to use the correct parameter 'order=recent'
                     val url = "https://www.aussiehousesitters.com.au/house-sitting-pet-sitting-jobs/search/$state?order=recent&page=$page"
                     Log.d("AHSScraper", "Requesting URL: $url")

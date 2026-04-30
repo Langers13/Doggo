@@ -4,7 +4,7 @@ Build the Doggo app as per the approved project brief.
 Include:
 1. Room Entity `HouseSitJob` (id, suburb, state, imageUrl, description, animals, lat, lng, startDate, endDate, isFavorited, isArchived, dateScraped).
 2. Room DAO with methods for filtering and purging expired jobs.
-3. AHSScraper using Ktor (GET session -> search loop with searchid, x-requested-with, User-Agent, Referer).
+3. AHSScraper using Ktor (GET session → search loop with searchid, x-requested-with, User-Agent, Referer).
 4. GeminiParser using Google AI SDK to parse HTML fragments.
 5. Bottom navigation (List, Map).
 6. List screen with filters (Favorite, Archived, Date-range) and manual refresh.

@@ -35,6 +35,9 @@ interface HouseSitJobDao {
     @Query("DELETE FROM house_sit_jobs WHERE startDate < :currentTime")
     suspend fun purgeExpiredJobs(currentTime: Long)
 
+    @Query("DELETE FROM house_sit_jobs")
+    suspend fun deleteAll()
+
     @Query("SELECT * FROM house_sit_jobs WHERE isArchived = 0 AND startDate >= :startRange AND (endDate <= :endRange OR :endRange = 0)")
     fun getJobsInRange(startRange: Long, endRange: Long): Flow<List<HouseSitJob>>
 }

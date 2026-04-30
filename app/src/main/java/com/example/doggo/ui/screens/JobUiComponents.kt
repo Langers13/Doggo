@@ -24,6 +24,7 @@ import java.util.*
 
 import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.ui.platform.LocalLocale
 
 @Composable
 fun JobCard(
@@ -108,7 +109,7 @@ fun JobCard(
                     modifier = Modifier.fillMaxWidth()
                 )
                 
-                val dateFormat = SimpleDateFormat("dd MMM", Locale.getDefault())
+                val dateFormat = SimpleDateFormat("dd MMM", LocalLocale.current.platformLocale)
                 val dateRange = "${dateFormat.format(Date(job.startDate))} - ${dateFormat.format(Date(job.endDate))}"
                 Text(
                     text = dateRange,

@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -180,6 +181,9 @@ fun ListScreen(
             TopAppBar(
                 title = { Text("Doggo Listings") },
                 actions = {
+                    IconButton(onClick = { viewModel.clearAllData() }) {
+                        Icon(Icons.Default.Delete, contentDescription = "Purge")
+                    }
                     IconButton(onClick = { viewModel.refresh() }, enabled = !isRefreshing) {
                         if (isRefreshing) {
                             CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)

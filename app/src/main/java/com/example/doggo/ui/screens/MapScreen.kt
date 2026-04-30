@@ -18,6 +18,7 @@ import com.google.maps.android.compose.*
 import com.google.maps.android.compose.clustering.Clustering
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.compose.ui.platform.LocalLocale
 
 @Composable
 fun MapScreen(
@@ -91,7 +92,7 @@ fun MapScreen(
                             
                             Spacer(modifier = Modifier.height(4.dp))
                             
-                            val dateFormat = SimpleDateFormat("dd MMM", Locale.getDefault())
+                            val dateFormat = SimpleDateFormat("dd MMM", LocalLocale.current.platformLocale)
                             Text(
                                 text = "${dateFormat.format(Date(job.startDate))} - ${dateFormat.format(Date(job.endDate))}",
                                 style = MaterialTheme.typography.labelLarge,

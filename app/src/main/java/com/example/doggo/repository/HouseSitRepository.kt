@@ -21,6 +21,12 @@ class HouseSitRepository(
     val favoriteJobs: Flow<List<HouseSitJob>> = dao.getFavoriteJobs()
     val archivedJobs: Flow<List<HouseSitJob>> = dao.getArchivedJobs()
 
+    suspend fun clearAllJobs() {
+        withContext(Dispatchers.IO) {
+            dao.deleteAll()
+        }
+    }
+
     suspend fun refreshJobs() {
         withContext(Dispatchers.IO) {
             // 1. Purge expired jobs

@@ -48,6 +48,12 @@ class DoggoViewModel(
     val favoriteJobs = repository.favoriteJobs.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val archivedJobs = repository.archivedJobs.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    fun clearAllData() {
+        viewModelScope.launch {
+            repository.clearAllJobs()
+        }
+    }
+
     fun refresh() {
         viewModelScope.launch {
             _isRefreshing.value = true

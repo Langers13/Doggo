@@ -128,7 +128,7 @@ class MainActivity : ComponentActivity() {
                                         WebViewScreen(
                                             url = key.url,
                                             title = key.title,
-                                            onBack = { if (backStack.size > 1) backStack.removeLast() }
+                                            onBack = { if (backStack.size > 1) backStack.removeAt(backStack.lastIndex) }
                                         )
                                     }
                                     }
