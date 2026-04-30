@@ -53,8 +53,16 @@ fun ListScreen(
     val jobs by viewModel.jobs.collectAsState()
     val availableSources by viewModel.sources.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val lastScrapeCount by viewModel.lastScrapeCount.collectAsState()
     val filterState by viewModel.filterState.collectAsState()
     val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(lastScrapeCount) {
+        lastScrapeCount?.let { count ->
+            snackbarHostState.showSnackbar("Added $count new jobs")
+        }
+    }
     
     var showFilters by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
@@ -177,6 +185,7 @@ fun ListScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Doggo Listings") },

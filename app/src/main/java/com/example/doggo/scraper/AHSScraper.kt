@@ -39,7 +39,7 @@ class AHSScraper(
 
     override suspend fun scrape(onJobScraped: suspend (HouseSitJob) -> Boolean) {
         Log.d("AHSScraper", "Starting scrape process")
-        val states = listOf("nsw", "qld")
+        val regions = listOf(2, 3, 5, 6, 7, 8, 9, 10, 47, 48, 49, 50)
 
         try {
             // Step 1: Establish session
@@ -48,14 +48,13 @@ class AHSScraper(
             }
             Log.d("AHSScraper", "Home response status: ${homeResponse.status}")
 
-            for (state in states) {
+            for (region in regions) {
                 var page = 1
                 var continueScraping = true
-                Log.d("AHSScraper", "Starting scrape for state: $state")
+                Log.d("AHSScraper", "Starting scrape for region: $region")
 
                 while (continueScraping) {
-                    // Updated URLs to use the correct parameter 'order=recent'
-                    val url = "https://www.aussiehousesitters.com.au/house-sitting-pet-sitting-jobs/search/$state?order=recent&page=$page"
+                    val url = "https://www.aussiehousesitters.com.au/house-sitting-pet-sitting-jobs/search?region=$region&order=recent&page=$page"
                     Log.d("AHSScraper", "Requesting URL: $url")
 
                     val listResponse = client.get(url) {
@@ -63,32 +62,24 @@ class AHSScraper(
                         header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
                         header("Referer", "https://www.aussiehousesitters.com.au/")
                     }
-                    Log.d("AHSScraper", "List response status: ${listResponse.status}")
-
+                    
                     val listHtml = listResponse.bodyAsText()
                     val listDoc = Jsoup.parse(listHtml)
                     val listings = listDoc.select(".search-listing")
-                    Log.d("AHSScraper", "Found ${listings.size} listings on $state page $page")
-
-                    if (listings.isNotEmpty()) {
-                        // Log a snippet of the first listing to verify Jsoup selectors
-                        Log.d("AHSScraper", "First listing snippet: ${listings.first()?.outerHtml()?.take(1000)}")
-                    }
+                    Log.d("AHSScraper", "Found ${listings.size} listings in region $region, page $page")
 
                     if (listings.isEmpty()) {
-                        Log.d("AHSScraper", "No listings found on $state page $page, stopping state")
+                        Log.d("AHSScraper", "No more listings in region $region, page $page")
                         break
                     }
 
                     for (listing in listings) {
-                        // 1. Extract ID from the <a name="jobad-XXXXX"> tag that precedes the listing div
                         var extractedId = listing.previousElementSibling()?.let { prev ->
                             if (prev.tagName() == "a" && prev.attr("name").startsWith("jobad-")) {
                                 prev.attr("name").removePrefix("jobad-")
                             } else null
                         }
 
-                        // 2. Fallback to data attributes on the listing element itself
                         if (extractedId.isNullOrEmpty()) {
                             extractedId = listing.attr("data-id").takeIf { it.isNotEmpty() }
                         }
@@ -96,20 +87,17 @@ class AHSScraper(
                         val lat = listing.attr("data-lat").toDoubleOrNull()
                         val lng = listing.attr("data-lng").toDoubleOrNull()
 
-                        Log.d("AHSScraper", "Parsing listing. Extracted ID: '$extractedId'")
                         val job = jobParser.parseJobElement(listing, lat, lng, extractedId, "AHS")
 
                         if (job != null) {
-                            Log.d("AHSScraper", "Successfully parsed job: ${job.suburb}")
                             continueScraping = onJobScraped(job)
                             if (!continueScraping) {
-                                Log.d("AHSScraper", "Existing job found or stopped, moving to next state")
+                                Log.d("AHSScraper", "Existing job found or stop signaled")
                                 break
                             }
-                        } else {
-                            Log.w("AHSScraper", "Failed to parse job fragment")
                         }
                     }
+                    if (!continueScraping) break
                     page++
                 }
             }

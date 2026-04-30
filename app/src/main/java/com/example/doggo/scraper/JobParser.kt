@@ -32,8 +32,8 @@ class JobParser {
 
             // 2. Location
             val suburb = linkElement.first()?.ownText()?.trim() ?: "Unknown"
-            val stateText = listing.select("h3 a span").text().trim()
-            val state = stateText.split(" ").firstOrNull()?.trim() ?: "Unknown"
+            val locationDescriptor = listing.select("h3 a span").text().trim()
+            val state = locationDescriptor.split(" ").firstOrNull()?.trim() ?: "Unknown"
 
             // 3. Image
             var imageUrl = ""
@@ -98,6 +98,7 @@ class JobParser {
                 startDate = startDate,
                 endDate = endDate,
                 listingUrl = listingUrl,
+                locationDescriptor = locationDescriptor,
                 source = source
             )
         } catch (e: Exception) {

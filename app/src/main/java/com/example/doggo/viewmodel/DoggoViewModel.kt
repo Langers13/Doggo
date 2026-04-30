@@ -14,6 +14,9 @@ class DoggoViewModel(
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
+    private val _lastScrapeCount = MutableStateFlow<Int?>(null)
+    val lastScrapeCount: StateFlow<Int?> = _lastScrapeCount.asStateFlow()
+
     private val _filterState = MutableStateFlow(FilterState())
     val filterState: StateFlow<FilterState> = _filterState.asStateFlow()
 
@@ -57,7 +60,9 @@ class DoggoViewModel(
     fun refresh() {
         viewModelScope.launch {
             _isRefreshing.value = true
-            repository.refreshJobs()
+            _lastScrapeCount.value = null
+            val count = repository.refreshJobs()
+            _lastScrapeCount.value = count
             _isRefreshing.value = false
         }
     }

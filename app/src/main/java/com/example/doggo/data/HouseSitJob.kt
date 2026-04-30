@@ -19,6 +19,7 @@ data class HouseSitJob(
     val startDate: Long,
     val endDate: Long,
     val listingUrl: String = "",
+    val locationDescriptor: String = "",
     val source: String = "",
     val isFavorited: Boolean = false,
     val isArchived: Boolean = false,

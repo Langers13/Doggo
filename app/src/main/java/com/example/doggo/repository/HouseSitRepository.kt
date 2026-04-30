@@ -27,11 +27,12 @@ class HouseSitRepository(
         }
     }
 
-    suspend fun refreshJobs() {
-        withContext(Dispatchers.IO) {
+    suspend fun refreshJobs(): Int {
+        return withContext(Dispatchers.IO) {
             // 1. Purge expired jobs
             dao.purgeExpiredJobs(System.currentTimeMillis())
 
+            var count = 0
             // 2. Start scraping
             scraper.scrape { job ->
                 if (job.id.isEmpty()) {
@@ -52,9 +53,11 @@ class HouseSitRepository(
 
                     Log.d("HouseSitRepository", "Inserting new job: ${geocodedJob.id} (${geocodedJob.suburb})")
                     dao.insertAll(listOf(geocodedJob))
+                    count++
                     true // Continue
                 }
             }
+            count
         }
     }
 
