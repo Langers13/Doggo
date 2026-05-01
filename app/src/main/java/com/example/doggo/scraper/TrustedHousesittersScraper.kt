@@ -3,203 +3,283 @@ package com.example.doggo.scraper
 import android.util.Log
 import com.example.doggo.data.HouseSitJob
 import io.ktor.client.*
+import io.ktor.client.call.*
 import io.ktor.client.engine.okhttp.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.client.plugins.cookies.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.serialization.kotlinx.json.*
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.*
 import org.jsoup.Jsoup
-import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlinx.coroutines.delay
 
 class TrustedHousesittersScraper : Scraper {
 
+    private val json = Json {
+        ignoreUnknownKeys = true
+        coerceInputValues = true
+        isLenient = true
+    }
+
     private val client = HttpClient(OkHttp) {
         install(HttpCookies)
         install(ContentNegotiation) {
-            json(Json {
-                ignoreUnknownKeys = true
-                coerceInputValues = true
-            })
+            json(json)
         }
     }
 
-    private val userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-    private val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.US)
-    private val baseUrl = "https://www.trustedhousesitters.com"
+    private val userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+    private val apiVersion = "2025-08-14"
+    private val jwt = "JWT eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjo4MTcwMTMsInVzZXJuYW1lIjoiX19USFNfX2M4M2E1MGUzZGJhZTQxY2I4NTlmZWQiLCJleHAiOjE3Nzg2NDAyNTcsImVtYWlsIjoic2xhbmd0b24xM0BnbWFpbC5jb20iLCJvcmlnX2lhdCI6MTc3NzQzMDY1NywiMmZhX2VuYWJsZWQiOnRydWV9.MT0jpX-aNbjoMTyBwaoVQ12gOJ-GYbxjlVhcSXhru-E"
 
-    private fun HttpRequestBuilder.commonHeaders() {
+    private fun HttpRequestBuilder.apiHeaders() {
+        header("User-Agent", userAgent)
+        header("Accept", "application/json, text/plain, */*")
+        header("api-key", "null")
+        header("api-version", apiVersion)
+        header("authorization", jwt)
+        header("ths-platform-detail", "web")
+        header("timezone-offset", "10")
+        header("referer", "https://www.trustedhousesitters.com/")
+    }
+
+    private fun HttpRequestBuilder.htmlHeaders() {
         header("User-Agent", userAgent)
         header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
-        header("Accept-Language", "en-US,en;q=0.9")
-        header("Cache-Control", "no-cache")
     }
 
     override suspend fun scrape(onJobScraped: suspend (HouseSitJob) -> Boolean) {
-        Log.d("THSScraper", "Starting scrape process")
-        val regions = listOf(
-            "queensland" to "QLD",
-            "new-south-wales" to "NSW"
+        Log.d("THSScraper", "Starting JSON-State based THS scrape")
+        val targets = listOf(
+            "https://www.trustedhousesitters.com/house-and-pet-sitting-assignments/australia/queensland/" to "QLD",
+            "https://www.trustedhousesitters.com/house-and-pet-sitting-assignments/australia/new-south-wales/" to "NSW"
         )
 
-        for ((regionSlug, stateCode) in regions) {
+        for ((baseTargetUrl, stateCode) in targets) {
             var page = 1
             var continueScraping = true
-            Log.d("THSScraper", "Scraping region: $regionSlug")
+            
+            while (continueScraping) {
+                val url = if (page == 1) baseTargetUrl else "$baseTargetUrl?page=$page"
+                Log.d("THSScraper", "Fetching HTML to extract state: $url")
 
-            try {
-                while (continueScraping) {
-                    val url = "$baseUrl/house-and-pet-sitting-assignments/australia/$regionSlug/?page=$page"
-                    Log.d("THSScraper", "Requesting URL: $url")
-
-                    val response = client.get(url) {
-                        commonHeaders()
-                    }
-
-                    if (!response.status.toString().startsWith("2")) {
-                        Log.e("THSScraper", "Failed to fetch page $page: ${response.status}")
-                        break
-                    }
-
+                try {
+                    val response = client.get(url) { htmlHeaders() }
                     val html = response.bodyAsText()
-                    val doc = Jsoup.parse(html)
                     
-                    // The first version that "worked" used a broad link-based search
-                    // Let's refine it to get individual cards without collapsing them
-                    val listings = doc.select("a[href*='/house-and-pet-sitting-assignments/australia/'][href*='/$regionSlug/']").mapNotNull { link ->
-                        // Try to find a reasonable parent container that looks like a card or list item
-                        link.parents().firstOrNull { 
-                            val className = it.className().lowercase()
-                            className.contains("card") || className.contains("item") || it.tagName() == "article"
-                        } ?: link.parent() // Fallback to immediate parent
-                    }.distinctBy { it.outerHtml() }
-                    
-                    Log.d("THSScraper", "Found ${listings.size} listings on page $page for $regionSlug")
+                    val ids = extractIdsFromInitialState(html)
+                    Log.d("THSScraper", "Extracted ${ids.size} IDs from __INITIAL_STATE__ on page $page for $stateCode")
 
-                    if (listings.isEmpty()) {
-                        Log.d("THSScraper", "No listings found on page $page. Stopping region.")
+                    if (ids.isEmpty()) {
+                        Log.d("THSScraper", "No IDs found in state. Ending $stateCode.")
                         break
                     }
 
-                    var validOnPage = 0
-                    for (listing in listings) {
-                        val job = parseListing(listing, stateCode)
-                        if (job != null) {
-                            validOnPage++
-                            continueScraping = onJobScraped(job)
-                            if (!continueScraping) break
+                    for (id in ids) {
+                        Log.d("THSScraper", "Fetching API details for ID: $id")
+                        val jobData = fetchJobDetails(id, stateCode)
+                        if (jobData != null) {
+                            for (job in jobData) {
+                                continueScraping = onJobScraped(job)
+                                if (!continueScraping) break
+                            }
                         }
+                        if (!continueScraping) break
+                        delay(500) // Small delay between API calls
                     }
 
                     if (!continueScraping) break
                     
-                    // Security break: if we found listings but none were valid, don't just keep going
-                    if (validOnPage == 0) {
-                        Log.w("THSScraper", "Found ${listings.size} listings but 0 were valid jobs. Stopping to avoid loop.")
-                        break
-                    }
+                    // Simple pagination check in HTML
+                    val doc = Jsoup.parse(html)
+                    val hasNext = doc.select("a:contains(Next), a[aria-label*='Next'], a[href*='page=${page+1}']").isNotEmpty()
+                    if (!hasNext) break
 
-                    // Pagination: Check for 'Next' link
-                    val hasNext = doc.select("a[href*='page=${page + 1}']").isNotEmpty() || 
-                                 doc.select("a:contains(Next), a[aria-label*='Next']").isNotEmpty()
-                    
-                    if (!hasNext) {
-                        Log.d("THSScraper", "No next page link found. Stopping region.")
-                        break
-                    }
-                    
                     page++
-                    delay(2000)
+                    delay(1000)
+                } catch (e: Exception) {
+                    Log.e("THSScraper", "Error on page $page: ${e.message}")
+                    break
                 }
-            } catch (e: Exception) {
-                Log.e("THSScraper", "Scraping failed for region $regionSlug", e)
             }
         }
-        Log.d("THSScraper", "Scrape process completed successfully")
     }
 
-    private fun parseListing(element: Element, stateCode: String): HouseSitJob? {
+    private fun extractIdsFromInitialState(html: String): List<String> {
         return try {
-            val linkElement = element.select("a[href*='/house-and-pet-sitting-assignments/']").firstOrNull() ?: return null
-            val relativeUrl = linkElement.attr("href").trimEnd('/')
-            val listingUrl = if (relativeUrl.startsWith("http")) relativeUrl else "$baseUrl$relativeUrl"
-            
-            // 1. ID Extraction (handling /l/ pattern)
-            // Example: .../wamberal-north/l/1040627/
-            val segments = relativeUrl.split("/")
-            val id = segments.lastOrNull()?.takeIf { it.all { c -> c.isDigit() } } ?: ""
-            if (id.isEmpty()) return null
-
-            // 2. Suburb Extraction
-            var suburb = ""
-            val idIndex = segments.lastIndexOf(id)
-            if (idIndex > 1 && segments[idIndex - 1] == "l") {
-                suburb = segments[idIndex - 2]
-            } else if (idIndex > 0) {
-                suburb = segments[idIndex - 1]
+            val marker = "window.__INITIAL_STATE__ ="
+            val startIndex = html.indexOf(marker)
+            if (startIndex == -1) {
+                Log.w("THSScraper", "Could not find window.__INITIAL_STATE__ marker in HTML")
+                return emptyList()
             }
-            suburb = suburb.replace("-", " ").split(" ").joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } }
-
-            // 3. Image Extraction
-            // Try meta tag if present, then srcset, then src
-            var imageUrl = element.select("meta[property='og:image']").attr("content").ifEmpty {
-                element.select("img").firstOrNull { it.attr("src").contains("cloudinary") || it.attr("src").contains("trustedhousesitters") }?.let {
-                    it.attr("srcset").split(" ").firstOrNull() ?: it.attr("src")
-                } ?: ""
-            }
-            if (imageUrl.startsWith("//")) imageUrl = "https:$imageUrl"
-
-            // 4. Description Extraction
-            val title = element.select("h3, .title, [class*='title']").text().trim()
-            val description = element.select("meta[property='og:description']").attr("content").trim().ifEmpty { title }
-
-            val locationText = element.select(".location, [class*='location']").text().trim().ifEmpty { 
-                "$suburb, $stateCode, Australia"
-            }
-
-            // 5. Dates
-            val dateText = element.text()
-            val dateMatch = Regex("""(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})\s*-\s*(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})""").find(dateText)
             
-            val startDate = dateMatch?.groupValues?.getOrNull(1)?.let { parseDate(it) } ?: System.currentTimeMillis()
-            val endDate = dateMatch?.groupValues?.getOrNull(2)?.let { parseDate(it) } ?: (startDate + 86400000)
-
-            // 6. Animals
-            val animals = mutableListOf<String>()
-            val petText = element.text().lowercase()
-            if (petText.contains("dog")) animals.add("Dog")
-            if (petText.contains("cat")) animals.add("Cat")
+            val jsonStart = html.indexOf("{", startIndex)
+            if (jsonStart == -1) return emptyList()
             
-            HouseSitJob(
-                id = id,
-                suburb = suburb.ifEmpty { "Unknown" },
-                state = stateCode,
-                imageUrl = imageUrl,
-                description = description,
-                animals = animals,
-                latitude = 0.0,
-                longitude = 0.0,
-                startDate = startDate,
-                endDate = endDate,
-                listingUrl = listingUrl,
-                locationDescriptor = locationText,
-                source = "TrustedHousesitters"
-            )
+            // Manually find balancing brace to handle trailing script content
+            val jsonEnd = findBalancingBrace(html, jsonStart)
+            if (jsonEnd == -1) {
+                Log.w("THSScraper", "Could not find balancing brace for INITIAL_STATE")
+                return emptyList()
+            }
+            
+            val jsonStr = html.substring(jsonStart, jsonEnd + 1)
+            val root = json.parseToJsonElement(jsonStr).jsonObject
+            
+            val ids = mutableListOf<String>()
+            findIdsInListingNodes(root, ids)
+            ids.distinct()
         } catch (e: Exception) {
-            Log.e("THSScraper", "Error parsing listing", e)
+            Log.e("THSScraper", "Failed to parse INITIAL_STATE JSON", e)
+            emptyList()
+        }
+    }
+
+    private fun findBalancingBrace(text: String, startIndex: Int): Int {
+        var depth = 0
+        var inString = false
+        var escaped = false
+        for (i in startIndex until text.length) {
+            val c = text[i]
+            if (escaped) {
+                escaped = false
+                continue
+            }
+            when (c) {
+                '\\' -> escaped = true
+                '"' -> inString = !inString
+                '{' -> if (!inString) depth++
+                '}' -> if (!inString) {
+                    depth--
+                    if (depth == 0) return i
+                }
+            }
+        }
+        return -1
+    }
+
+    private fun findIdsInListingNodes(element: JsonElement, ids: MutableList<String>) {
+        when (element) {
+            is JsonObject -> {
+                // If this object is named "listing", its children keys are usually the IDs
+                element["listing"]?.jsonObject?.let { listingMap ->
+                    listingMap.keys.forEach { key ->
+                        if (key.all { it.isDigit() }) {
+                            ids.add(key)
+                        }
+                    }
+                }
+                
+                // Also check if this object HAS an "id" and "title" (standard listing shape)
+                val id = element["id"]?.jsonPrimitive?.contentOrNull
+                val hasTitle = element.containsKey("title")
+                if (id != null && id.all { it.isDigit() } && hasTitle) {
+                    ids.add(id)
+                }
+
+                // Continue searching deeper
+                element.values.forEach { findIdsInListingNodes(it, ids) }
+            }
+            is JsonArray -> {
+                element.forEach { findIdsInListingNodes(it, ids) }
+            }
+            else -> {}
+        }
+    }
+
+    private suspend fun fetchJobDetails(id: String, stateCode: String): List<HouseSitJob>? {
+        return try {
+            val apiUrl = "https://www.trustedhousesitters.com/api/v3/search/listings/$id/"
+            val response: ThsApiResponse = client.get(apiUrl) { apiHeaders() }.body()
+            
+            val suburb = response.location.name
+            val description = response.title
+            val imageUrl = response.photos.firstOrNull()?.publicId?.let { 
+                "https://res.cloudinary.com/trustedhousesitters/image/upload/t_film_ratio,f_auto/v1/$it"
+            } ?: ""
+            
+            val animals = response.pets.map { it.animal.name.replaceFirstChar { c -> c.uppercase() } }.distinct()
+
+            response.assignments.map { assignment ->
+                HouseSitJob(
+                    id = "${id}_${assignment.id}",
+                    suburb = suburb,
+                    state = stateCode,
+                    imageUrl = imageUrl,
+                    description = description,
+                    animals = animals,
+                    latitude = response.location.coordinates.lat,
+                    longitude = response.location.coordinates.lon,
+                    startDate = parseIsoDate(assignment.startDate),
+                    endDate = parseIsoDate(assignment.endDate),
+                    listingUrl = "https://www.trustedhousesitters.com/house-and-pet-sitting-assignments/australia/${response.location.admin1Slug}/${response.location.slug}/l/$id/",
+                    locationDescriptor = suburb,
+                    source = "TrustedHousesitters"
+                )
+            }
+        } catch (e: Exception) {
+            Log.e("THSScraper", "Failed to fetch details for $id: ${e.message}")
             null
         }
     }
 
-    private fun parseDate(dateStr: String): Long? {
+    private fun parseIsoDate(isoStr: String): Long {
         return try {
-            dateFormat.parse(dateStr.trim())?.time
+            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+            sdf.parse(isoStr)?.time ?: System.currentTimeMillis()
         } catch (e: Exception) {
-            null
+            System.currentTimeMillis()
         }
     }
 }
+
+@Serializable
+data class ThsApiResponse(
+    val id: String,
+    val title: String,
+    val location: ThsLocation,
+    val photos: List<ThsPhoto>,
+    val pets: List<ThsPet>,
+    val assignments: List<ThsAssignment>
+)
+
+@Serializable
+data class ThsLocation(
+    val name: String,
+    val slug: String,
+    val admin1Slug: String,
+    val coordinates: ThsCoordinates
+)
+
+@Serializable
+data class ThsCoordinates(
+    val lat: Double,
+    val lon: Double
+)
+
+@Serializable
+data class ThsPhoto(
+    val publicId: String
+)
+
+@Serializable
+data class ThsPet(
+    val animal: ThsAnimal
+)
+
+@Serializable
+data class ThsAnimal(
+    val name: String
+)
+
+@Serializable
+data class ThsAssignment(
+    val id: String,
+    val startDate: String,
+    val endDate: String
+)
