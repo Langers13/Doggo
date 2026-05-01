@@ -14,7 +14,7 @@ import android.util.Log
 class HouseSitRepository(
     private val dao: HouseSitJobDao,
     private val suburbDao: SuburbLocationDao,
-    private val scraper: Scraper,
+    private val scrapers: List<Scraper>,
     private val geocodingService: GeocodingService
 ) {
     val allActiveJobs: Flow<List<HouseSitJob>> = dao.getAllActiveJobs()
@@ -32,32 +32,39 @@ class HouseSitRepository(
             // 1. Purge expired jobs
             dao.purgeExpiredJobs(System.currentTimeMillis())
 
-            var count = 0
-            // 2. Start scraping
-            scraper.scrape { job ->
-                if (job.id.isEmpty()) {
-                    Log.w("HouseSitRepository", "Skipping job with empty ID: ${job.suburb}")
-                    return@scrape true // Skip this one but continue scraping
-                }
+            var totalCount = 0
+            
+            // 2. Start scraping from all sources
+            for (scraper in scrapers) {
+                Log.d("HouseSitRepository", "Starting scraper: ${scraper::class.java.simpleName}")
+                var scraperCount = 0
+                scraper.scrape { job ->
+                    if (job.id.isEmpty()) {
+                        Log.w("HouseSitRepository", "Skipping job with empty ID: ${job.suburb}")
+                        return@scrape true // Skip this one but continue scraping
+                    }
 
-                // Check if job already exists in DB
-                val alreadyExists = dao.exists(job.id)
-                if (alreadyExists) {
-                    Log.d("HouseSitRepository", "Job ${job.id} (${job.suburb}) already exists. Stopping scrape.")
-                    false // Stop
-                } else {
-                    // 3. Geocode-on-scrape logic
-                    val geocodedJob = if (job.latitude == 0.0 || job.longitude == 0.0) {
-                        geocodeJob(job)
-                    } else job
+                    // Check if job already exists in DB
+                    val alreadyExists = dao.exists(job.id)
+                    if (alreadyExists) {
+                        Log.d("HouseSitRepository", "Job ${job.id} (${job.suburb}) already exists. Stopping this scraper.")
+                        false // Stop this scraper
+                    } else {
+                        // 3. Geocode-on-scrape logic
+                        val geocodedJob = if (job.latitude == 0.0 || job.longitude == 0.0) {
+                            geocodeJob(job)
+                        } else job
 
-                    Log.d("HouseSitRepository", "Inserting new job: ${geocodedJob.id} (${geocodedJob.suburb})")
-                    dao.insertAll(listOf(geocodedJob))
-                    count++
-                    true // Continue
+                        Log.d("HouseSitRepository", "Inserting new job: ${geocodedJob.id} (${geocodedJob.suburb})")
+                        dao.insertAll(listOf(geocodedJob))
+                        scraperCount++
+                        totalCount++
+                        true // Continue
+                    }
                 }
+                Log.d("HouseSitRepository", "Scraper ${scraper::class.java.simpleName} found $scraperCount new jobs")
             }
-            count
+            totalCount
         }
     }
 

@@ -19,6 +19,8 @@ import com.example.doggo.data.AppDatabase
 import com.example.doggo.repository.HouseSitRepository
 import com.example.doggo.network.GeocodingService
 import com.example.doggo.scraper.AHSScraper
+import com.example.doggo.scraper.MindaHomeScraper
+import com.example.doggo.scraper.TrustedHousesittersScraper
 import com.example.doggo.scraper.JobParser
 import com.example.doggo.ui.screens.ListScreen
 import com.example.doggo.ui.screens.MapScreen
@@ -51,12 +53,15 @@ class MainActivity : ComponentActivity() {
         
         val database = AppDatabase.getDatabase(this)
         val jobParser = JobParser()
-        val scraper = AHSScraper(jobParser)
+        // val ahsScraper = AHSScraper(jobParser)
+        // val mindaHomeScraper = MindaHomeScraper()
+        val thsScraper = TrustedHousesittersScraper()
+        
         val geocodingService = GeocodingService()
         val repository = HouseSitRepository(
             database.houseSitJobDao(),
             database.suburbLocationDao(),
-            scraper,
+            listOf(thsScraper), // Only TrustedHousesitters for now
             geocodingService
         )
         

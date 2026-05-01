@@ -51,7 +51,11 @@ fun JobCard(
                         .httpHeaders(
                             NetworkHeaders.Builder()
                                 .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
-                                .set("Referer", "https://www.aussiehousesitters.com.au/")
+                                .set("Referer", when(job.source) {
+                                    "Mindahome" -> "https://mindahome.com.au/"
+                                    "TrustedHousesitters" -> "https://www.trustedhousesitters.com/"
+                                    else -> "https://www.aussiehousesitters.com.au/"
+                                })
                                 .build()
                         )
                         .crossfade(true)
@@ -82,6 +86,20 @@ fun JobCard(
                             painter = androidx.compose.ui.res.painterResource(id = com.example.doggo.R.drawable.ahs_logo),
                             contentDescription = "AHS Logo",
                             modifier = Modifier.size(40.dp)
+                        )
+                    } else if (job.source == "Mindahome") {
+                        androidx.compose.foundation.Image(
+                            painter = androidx.compose.ui.res.painterResource(id = com.example.doggo.R.drawable.mindahome_logo),
+                            contentDescription = "Mindahome Logo",
+                            modifier = Modifier.size(width = 120.dp, height = 60.dp),
+                            contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                        )
+                    } else if (job.source == "TrustedHousesitters") {
+                        androidx.compose.foundation.Image(
+                            painter = androidx.compose.ui.res.painterResource(id = com.example.doggo.R.drawable.trusted_house_sitters),
+                            contentDescription = "TrustedHousesitters Logo",
+                            modifier = Modifier.size(width = 120.dp, height = 40.dp),
+                            contentScale = androidx.compose.ui.layout.ContentScale.Fit
                         )
                     }
                     
